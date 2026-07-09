@@ -3,6 +3,19 @@
   "version": "0.1.0",
   "checksum": "__CHECKSUM__",
   "silo_api_version": "v1",
+  "presentation": {
+    "display_name": "Ebook Metadata",
+    "summary": "Enrich ebook libraries with book metadata from public and credentialed sources.",
+    "description_markdown": "Searches OpenLibrary, Google Books, ISBNdb, Hardcover, Goodreads, Amazon, Anna's Archive, Project Gutenberg, BookBrainz, FantasticFiction, ISFDB, LibraryThing, Internet Archive, WorldCat, and Douban. Results include book identity, descriptions, contributors, and artwork.",
+    "setup_markdown": "Install the plugin and add **Ebook Metadata** to an ebook library's metadata provider chain. Optionally limit `enabled_sources`, set a regional hint, or add API keys for Google Books, ISBNdb, and Hardcover. Sources that require a key are skipped until one is configured.",
+    "homepage_url": "https://github.com/Silo-Server/silo-plugin-ebook-metadata",
+    "source_url": "https://github.com/Silo-Server/silo-plugin-ebook-metadata",
+    "support_url": "https://github.com/Silo-Server/silo-plugin-ebook-metadata/issues",
+    "changelog_url": "https://github.com/Silo-Server/silo-plugin-ebook-metadata/releases",
+    "publisher_name": "Silo",
+    "publisher_url": "https://github.com/Silo-Server",
+    "license_spdx": "NOASSERTION"
+  },
   "supported_platforms": [
     {
       "os": "darwin",
