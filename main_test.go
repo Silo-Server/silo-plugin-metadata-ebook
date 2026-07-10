@@ -233,8 +233,8 @@ func TestLoadManifestParsesEbookCapability(t *testing.T) {
 	if manifest.GetPluginId() != "silo.ebook-metadata" {
 		t.Fatalf("PluginId = %q, want silo.ebook-metadata", manifest.GetPluginId())
 	}
-	if manifest.GetVersion() != "0.1.0" {
-		t.Fatalf("Version = %q, want 0.1.0", manifest.GetVersion())
+	if manifest.GetVersion() != "0.1.1" {
+		t.Fatalf("Version = %q, want 0.1.1", manifest.GetVersion())
 	}
 	if manifest.GetSiloApiVersion() != "v1" {
 		t.Fatalf("SiloApiVersion = %q, want v1", manifest.GetSiloApiVersion())
