@@ -213,3 +213,39 @@ func TestNewProviderWithOptionsPassesAPIKeys(t *testing.T) {
 		t.Fatalf("Hardcover api key not configured")
 	}
 }
+
+func TestNewProviderDefaultsToSanctionedAPISources(t *testing.T) {
+	p := NewProviderWithOptions(Options{})
+
+	if len(p.sources) != 2 {
+		t.Fatalf("default sources length = %d, want 2 (openlibrary, googlebooks)", len(p.sources))
+	}
+	if p.byID["openlibrary"] == nil || p.byID["googlebooks"] == nil {
+		t.Fatalf("primary sources missing from defaults: %#v", p.byID)
+	}
+	if p.byID["goodreads"] != nil || p.byID["amazon"] != nil {
+		t.Fatalf("scrape-tier sources must be opt-in, got %#v", p.byID)
+	}
+}
+
+func TestNewProviderDefaultsIncludeKeyedSources(t *testing.T) {
+	p := NewProviderWithOptions(Options{ISBNdbAPIKey: "isbn-key", HardcoverAPIKey: "hc-key"})
+
+	if len(p.sources) != 4 {
+		t.Fatalf("keyed default sources length = %d, want 4", len(p.sources))
+	}
+	if p.byID["isbndb"] == nil || p.byID["hardcover"] == nil {
+		t.Fatalf("keyed sources missing from defaults: %#v", p.byID)
+	}
+}
+
+func TestNewProviderExplicitEnabledSourcesOverrideNarrowDefaults(t *testing.T) {
+	p := NewProviderWithOptions(Options{EnabledSources: []string{"amazon,goodreads,worldcat"}})
+
+	if len(p.sources) != 3 {
+		t.Fatalf("explicit sources length = %d, want 3", len(p.sources))
+	}
+	if p.byID["amazon"] == nil || p.byID["goodreads"] == nil || p.byID["worldcat"] == nil {
+		t.Fatalf("explicitly enabled sources missing: %#v", p.byID)
+	}
+}

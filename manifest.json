@@ -34,7 +34,7 @@
     {
       "key": "enabled_sources",
       "title": "Enabled sources",
-      "description": "Comma-separated source IDs to search. Empty uses the default source set.",
+      "description": "Comma-separated source IDs to search. Empty uses the default set: openlibrary and googlebooks, plus isbndb/hardcover when their API keys are configured. Other sources (goodreads, amazon, annasarchive, gutenberg, bookbrainz, fantasticfiction, isfdb, librarything, internetarchive, worldcat, douban) are opt-in.",
       "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}}}",
       "admin_form": {
         "fields": [
