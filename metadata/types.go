@@ -7,6 +7,7 @@ type SearchQuery struct {
 	ContentType string
 	ProviderIDs map[string]string
 	Language    string
+	Region      string
 }
 
 type Match struct {

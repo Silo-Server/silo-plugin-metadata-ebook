@@ -39,6 +39,10 @@ func (c *HardcoverClient) ID() string {
 	return "hardcover"
 }
 
+func (c *HardcoverClient) eligible() bool {
+	return strings.TrimSpace(c.apiKey) != ""
+}
+
 func (c *HardcoverClient) Search(ctx context.Context, q metadata.SearchQuery) ([]metadata.Match, error) {
 	if strings.TrimSpace(c.apiKey) == "" {
 		return nil, nil
@@ -47,15 +51,16 @@ func (c *HardcoverClient) Search(ctx context.Context, q metadata.SearchQuery) ([
 	if query == "" {
 		return nil, nil
 	}
+	// Hardcover forbids _ilike (and friends) on its Hasura layer — arbitrary
+	// where-filters answer 403. Text search goes through the dedicated
+	// Typesense-backed `search` field instead, which returns raw Typesense
+	// results ({found, hits: [{document: {...}}]}).
 	const gql = `query SearchBooks($q: String!) {
-  books(where: {title: {_ilike: $q}}, limit: 20) {
-    id title description release_date pages
-    contributions { author { name } }
-    editions { isbn_13 isbn_10 }
-    image { url }
+  search(query: $q, query_type: "Book", per_page: 20, page: 1) {
+    results
   }
 }`
-	body, err := c.graphql(ctx, gql, map[string]any{"q": "%" + query + "%"})
+	body, err := c.graphql(ctx, gql, map[string]any{"q": query})
 	if err != nil {
 		return nil, err
 	}
@@ -63,9 +68,13 @@ func (c *HardcoverClient) Search(ctx context.Context, q metadata.SearchQuery) ([
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, err
 	}
-	matches := make([]metadata.Match, 0, len(resp.Data.Books))
-	for _, book := range resp.Data.Books {
-		matches = append(matches, book.toMatch())
+	results, err := resp.Data.Search.typesenseResults()
+	if err != nil {
+		return nil, err
+	}
+	matches := make([]metadata.Match, 0, len(results.Hits))
+	for _, hit := range results.Hits {
+		matches = append(matches, hit.Document.toMatch())
 	}
 	return matches, nil
 }
@@ -159,8 +168,93 @@ type hardcoverFetchResponse struct {
 
 type hardcoverSearchResponse struct {
 	Data struct {
-		Books []hardcoverBook `json:"books"`
+		Search hardcoverSearchPayload `json:"search"`
 	} `json:"data"`
+}
+
+// hardcoverSearchPayload carries the `search.results` jsonb, which Hasura may
+// serialize as an object or a JSON-encoded string depending on version.
+type hardcoverSearchPayload struct {
+	Results json.RawMessage `json:"results"`
+}
+
+type hardcoverTypesenseResults struct {
+	Found int `json:"found"`
+	Hits  []struct {
+		Document hardcoverSearchDocument `json:"document"`
+	} `json:"hits"`
+}
+
+func (p hardcoverSearchPayload) typesenseResults() (*hardcoverTypesenseResults, error) {
+	raw := bytes.TrimSpace(p.Results)
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		return &hardcoverTypesenseResults{}, nil
+	}
+	if raw[0] == '"' {
+		var encoded string
+		if err := json.Unmarshal(raw, &encoded); err != nil {
+			return nil, fmt.Errorf("hardcover search results string: %w", err)
+		}
+		raw = []byte(encoded)
+	}
+	var results hardcoverTypesenseResults
+	if err := json.Unmarshal(raw, &results); err != nil {
+		return nil, fmt.Errorf("hardcover search results: %w", err)
+	}
+	return &results, nil
+}
+
+// hardcoverSearchDocument is the Typesense book document shape.
+type hardcoverSearchDocument struct {
+	ID          string          `json:"id"`
+	Title       string          `json:"title"`
+	Description string          `json:"description"`
+	AuthorNames []string        `json:"author_names"`
+	ISBNs       []string        `json:"isbns"`
+	ReleaseYear int             `json:"release_year"`
+	Pages       int             `json:"pages"`
+	Image       *hardcoverImage `json:"image"`
+}
+
+func (d hardcoverSearchDocument) toMatch() metadata.Match {
+	authors := make([]string, 0, len(d.AuthorNames))
+	for _, name := range d.AuthorNames {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			authors = append(authors, trimmed)
+		}
+	}
+	// Prefer a 13-digit bookland ISBN; the isbns array mixes 10/13-digit
+	// forms across every edition and language.
+	isbn := ""
+	for _, candidate := range d.ISBNs {
+		if len(candidate) == 13 && (strings.HasPrefix(candidate, "978") || strings.HasPrefix(candidate, "979")) {
+			isbn = candidate
+			break
+		}
+	}
+	if isbn == "" {
+		for _, candidate := range d.ISBNs {
+			if len(candidate) == 10 {
+				isbn = candidate
+				break
+			}
+		}
+	}
+	coverURL := ""
+	if d.Image != nil {
+		coverURL = d.Image.URL
+	}
+	return metadata.Match{
+		Provider:    "hardcover",
+		ProviderID:  d.ID,
+		Title:       d.Title,
+		Authors:     authors,
+		Description: d.Description,
+		PublishYear: d.ReleaseYear,
+		ISBN:        isbn,
+		CoverURL:    coverURL,
+		PageCount:   d.Pages,
+	}
 }
 
 type hardcoverBook struct {

@@ -107,11 +107,27 @@ func TestHardcoverSearchByText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(matches) != 1 {
-		t.Fatalf("Search() returned %d matches, want 1", len(matches))
+	if len(matches) != 2 {
+		t.Fatalf("Search() returned %d matches, want 2", len(matches))
 	}
-	if matches[0].Provider != "hardcover" || matches[0].ProviderID != "97844" {
-		t.Fatalf("Search()[0] = %#v", matches[0])
+	first := matches[0]
+	if first.Provider != "hardcover" || first.ProviderID != "97844" {
+		t.Fatalf("Search()[0] = %#v", first)
+	}
+	if first.Title != "Project Hail Mary" || first.PublishYear != 2021 || first.PageCount != 476 {
+		t.Fatalf("Search()[0] mapped = %#v", first)
+	}
+	if len(first.Authors) != 1 || first.Authors[0] != "Andy Weir" {
+		t.Fatalf("Search()[0].Authors = %#v", first.Authors)
+	}
+	if first.ISBN != "9780593135204" {
+		t.Fatalf("Search()[0].ISBN = %q, want the 13-digit form preferred", first.ISBN)
+	}
+	if first.CoverURL != "https://example/cover.jpg" {
+		t.Fatalf("Search()[0].CoverURL = %q", first.CoverURL)
+	}
+	if matches[1].ProviderID != "555001" || matches[1].ISBN != "" {
+		t.Fatalf("Search()[1] = %#v", matches[1])
 	}
 }
 

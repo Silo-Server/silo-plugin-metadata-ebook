@@ -10,11 +10,13 @@ import (
 	"strings"
 
 	"github.com/Silo-Server/silo-plugin-ebook-metadata/metadata"
+	"golang.org/x/time/rate"
 )
 
 const (
 	openLibraryBaseURL   = "https://openlibrary.org"
 	openLibraryCoversURL = "https://covers.openlibrary.org"
+	openLibraryRPM       = 60
 )
 
 var openLibraryEditionIDRE = regexp.MustCompile(`^OL[0-9A-Za-z]+M$`)
@@ -24,6 +26,7 @@ type OpenLibraryClient struct {
 	coversBase string
 	client     *http.Client
 	userAgent  string
+	limiter    *rate.Limiter
 }
 
 func NewOpenLibraryClient(userAgent string) *OpenLibraryClient {
@@ -36,6 +39,7 @@ func NewOpenLibraryClientAt(baseURL, coversURL, userAgent string) *OpenLibraryCl
 		coversBase: strings.TrimRight(coversURL, "/"),
 		client:     http.DefaultClient,
 		userAgent:  userAgent,
+		limiter:    newLimiter(openLibraryRPM),
 	}
 }
 
@@ -57,6 +61,9 @@ func (c *OpenLibraryClient) Search(ctx context.Context, q metadata.SearchQuery) 
 			return nil, err
 		}
 		return []metadata.Match{*match}, nil
+	}
+	if err := waitForLimiter(ctx, c.limiter); err != nil {
+		return nil, err
 	}
 
 	endpoint := fmt.Sprintf("%s/search.json?q=%s&limit=20", c.baseURL, url.QueryEscape(query))
@@ -90,6 +97,9 @@ func (c *OpenLibraryClient) Fetch(ctx context.Context, id string) (*metadata.Mat
 		path = "/books/" + url.PathEscape(id) + ".json"
 	} else {
 		return nil, nil
+	}
+	if err := waitForLimiter(ctx, c.limiter); err != nil {
+		return nil, err
 	}
 
 	req, err := http.NewRequest(http.MethodGet, c.baseURL+path, nil)
@@ -217,4 +227,10 @@ func (d openLibrarySearchDoc) toMatch(coversBase string) metadata.Match {
 		Language:    firstNonEmpty(d.Language...),
 		PageCount:   d.NumPages,
 	}
+}
+
+// SetRequestsPerMinute replaces the client's rate limit. Used to tune the
+// OpenLibrary request budget (and by tests to force saturation semantics).
+func (c *OpenLibraryClient) SetRequestsPerMinute(rpm float64) {
+	c.limiter = newLimiter(rpm)
 }

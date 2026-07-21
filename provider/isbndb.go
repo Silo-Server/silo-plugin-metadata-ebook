@@ -37,6 +37,10 @@ func (c *ISBNdbClient) ID() string {
 	return "isbndb"
 }
 
+func (c *ISBNdbClient) eligible() bool {
+	return strings.TrimSpace(c.apiKey) != ""
+}
+
 func (c *ISBNdbClient) Search(ctx context.Context, q metadata.SearchQuery) ([]metadata.Match, error) {
 	if strings.TrimSpace(c.apiKey) == "" {
 		return nil, nil

@@ -3,14 +3,103 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Silo-Server/silo-plugin-ebook-metadata/metadata"
 	"github.com/Silo-Server/silo-plugin-ebook-metadata/provider"
 	pluginv1 "github.com/Silo-Server/silo-plugin-sdk/pkg/pluginproto/silo/plugin/v1"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 )
+
+type rpcQuerySource struct{}
+
+func (rpcQuerySource) ID() string {
+	return "catalog"
+}
+
+func (rpcQuerySource) Search(context.Context, metadata.SearchQuery) ([]metadata.Match, error) {
+	return []metadata.Match{{
+		Provider:   "catalog",
+		ProviderID: "dune",
+		Title:      "Dune",
+		Authors:    []string{"Frank Herbert"},
+	}}, nil
+}
+
+func (rpcQuerySource) Fetch(context.Context, string) (*metadata.Match, error) {
+	return nil, nil
+}
+
+type rpcCaptureSource struct {
+	queries chan metadata.SearchQuery
+}
+
+func (s rpcCaptureSource) ID() string {
+	return "catalog"
+}
+
+func (s rpcCaptureSource) Search(_ context.Context, query metadata.SearchQuery) ([]metadata.Match, error) {
+	s.queries <- query
+	return nil, nil
+}
+
+func (s rpcCaptureSource) Fetch(context.Context, string) (*metadata.Match, error) {
+	return nil, nil
+}
+
+func TestMetadataServerSearchRanksFreeTextAndExactTitleQueries(t *testing.T) {
+	server := &metadataServer{
+		runtime: &runtimeServer{state: runtimeState{
+			provider: provider.NewProviderWithSources([]provider.Source{rpcQuerySource{}}),
+		}},
+	}
+
+	for _, query := range []string{"Dune Frank Herbert", "Dune"} {
+		resp, err := server.Search(context.Background(), &pluginv1.SearchMetadataRequest{
+			Query:    query,
+			ItemType: "ebook",
+		})
+		if err != nil {
+			t.Fatalf("Search(%q) error = %v", query, err)
+		}
+		if len(resp.GetResults()) != 1 || resp.GetResults()[0].GetProviderId() != "catalog:dune" {
+			t.Fatalf("Search(%q) results = %#v, want Dune", query, resp.GetResults())
+		}
+	}
+}
+
+func TestMetadataServerSearchKeepsRegionSeparateFromLanguage(t *testing.T) {
+	queries := make(chan metadata.SearchQuery, 1)
+	server := &metadataServer{
+		runtime: &runtimeServer{state: runtimeState{
+			provider: provider.NewProviderWithSources([]provider.Source{rpcCaptureSource{queries: queries}}),
+			options:  provider.Options{DefaultRegion: "US"},
+		}},
+	}
+
+	_, err := server.Search(context.Background(), &pluginv1.SearchMetadataRequest{
+		Query:    "Dune",
+		ItemType: "ebook",
+		Language: "en-US",
+	})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	query := <-queries
+	if query.Language != "en-US" {
+		t.Fatalf("Language = %q, want request language en-US", query.Language)
+	}
+	if query.Region != "US" {
+		t.Fatalf("Region = %q, want configured region US", query.Region)
+	}
+}
 
 func TestRuntimeServerConfigureNoOp(t *testing.T) {
 	server := &runtimeServer{state: runtimeState{provider: provider.NewProvider()}}
@@ -78,6 +167,103 @@ func TestMetadataServerGetMetadataReturnsNilForUnknown(t *testing.T) {
 	if resp.GetItem() != nil {
 		t.Fatalf("GetMetadata().Item = %#v, want nil", resp.GetItem())
 	}
+}
+
+func TestMetadataRPCErrorMapsRateLimitToResourceExhaustedWithRetryInfo(t *testing.T) {
+	err := metadataRPCError(provider.NewRateLimitedError(time.Second))
+
+	if got := status.Code(err); got != codes.ResourceExhausted {
+		t.Fatalf("status.Code() = %s, want ResourceExhausted", got)
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("status.FromError() did not recognize %T", err)
+	}
+	var retryInfo *errdetails.RetryInfo
+	for _, detail := range st.Details() {
+		if value, ok := detail.(*errdetails.RetryInfo); ok {
+			retryInfo = value
+		}
+	}
+	if retryInfo == nil {
+		t.Fatal("gRPC status has no RetryInfo detail")
+	}
+	if got := retryInfo.GetRetryDelay().AsDuration(); got != time.Second {
+		t.Fatalf("RetryInfo.RetryDelay = %s, want 1s", got)
+	}
+}
+
+func TestMetadataRPCErrorPreservesNonRateLimitErrors(t *testing.T) {
+	want := context.Canceled
+	if got := metadataRPCError(want); got != want {
+		t.Fatalf("metadataRPCError() = %v, want original error", got)
+	}
+}
+
+func TestMetadataSearchMapsAdmissionSaturationToResourceExhausted(t *testing.T) {
+	server, source := rateLimitedMetadataServer(t)
+	if _, err := source.Search(context.Background(), metadata.SearchQuery{Title: "prime limiter"}); err != nil {
+		t.Fatalf("prime source limiter: %v", err)
+	}
+
+	_, err := server.Search(context.Background(), &pluginv1.SearchMetadataRequest{
+		Query:    "Dune",
+		ItemType: "ebook",
+	})
+
+	requireResourceExhaustedRetryInfo(t, err)
+}
+
+func TestMetadataGetMapsAdmissionSaturationPastDeadlineToResourceExhausted(t *testing.T) {
+	server, source := rateLimitedMetadataServer(t)
+	if _, err := source.Search(context.Background(), metadata.SearchQuery{Title: "prime limiter"}); err != nil {
+		t.Fatalf("prime source limiter: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	_, err := server.GetMetadata(ctx, &pluginv1.GetMetadataRequest{
+		ProviderId: "openlibrary:OL1M",
+		ItemType:   "ebook",
+	})
+
+	requireResourceExhaustedRetryInfo(t, err)
+}
+
+func rateLimitedMetadataServer(t *testing.T) (*metadataServer, *provider.OpenLibraryClient) {
+	t.Helper()
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"docs":[]}`))
+	}))
+	t.Cleanup(upstream.Close)
+	source := provider.NewOpenLibraryClientAt(upstream.URL, upstream.URL, "test-agent")
+	// rpm=1 puts the next token a minute out — beyond the bounded admission
+	// wait — so these tests keep exercising the saturation→ResourceExhausted
+	// mapping rather than the new short-delay wait.
+	source.SetRequestsPerMinute(1)
+	return &metadataServer{
+		runtime: &runtimeServer{state: runtimeState{
+			provider: provider.NewProviderWithSources([]provider.Source{source}),
+		}},
+	}, source
+}
+
+func requireResourceExhaustedRetryInfo(t *testing.T, err error) {
+	t.Helper()
+	if got := status.Code(err); got != codes.ResourceExhausted {
+		t.Fatalf("status.Code() = %s, want ResourceExhausted; error = %v", got, err)
+	}
+	st := status.Convert(err)
+	for _, detail := range st.Details() {
+		if retryInfo, ok := detail.(*errdetails.RetryInfo); ok {
+			if got := retryInfo.GetRetryDelay().AsDuration(); got <= 0 {
+				t.Fatalf("RetryInfo.RetryDelay = %s, want positive duration", got)
+			}
+			return
+		}
+	}
+	t.Fatal("gRPC status has no RetryInfo detail")
 }
 
 func TestRuntimeServerConcurrentConfigureAndStateReads(t *testing.T) {

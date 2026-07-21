@@ -40,6 +40,10 @@ func (c *GoogleBooksClient) ID() string {
 	return "googlebooks"
 }
 
+func (c *GoogleBooksClient) eligible() bool {
+	return strings.TrimSpace(c.apiKey) != ""
+}
+
 func (c *GoogleBooksClient) Search(ctx context.Context, q metadata.SearchQuery) ([]metadata.Match, error) {
 	if strings.TrimSpace(c.apiKey) == "" {
 		return nil, nil

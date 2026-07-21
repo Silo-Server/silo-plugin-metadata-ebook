@@ -36,6 +36,32 @@ func NormalizeISBN(value string) string {
 	return result
 }
 
+func CanonicalISBN(value string) string {
+	normalized := NormalizeISBN(value)
+	if len(normalized) != 10 {
+		return normalized
+	}
+
+	prefix := "978" + normalized[:9]
+	sum := 0
+	for i, r := range prefix {
+		digit := int(r - '0')
+		if i%2 == 1 {
+			sum += digit * 3
+		} else {
+			sum += digit
+		}
+	}
+	checkDigit := byte('0' + (10-sum%10)%10)
+	return prefix + string(checkDigit)
+}
+
+func EquivalentISBN(left, right string) bool {
+	left = CanonicalISBN(left)
+	right = CanonicalISBN(right)
+	return left != "" && left == right
+}
+
 func validISBN10(value string) bool {
 	sum := 0
 	for i, r := range value {
