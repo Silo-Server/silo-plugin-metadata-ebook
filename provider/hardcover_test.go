@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Silo-Server/silo-plugin-ebook-metadata/metadata"
 )
@@ -144,5 +145,29 @@ func TestHardcoverFetchNonnumericReturnsNil(t *testing.T) {
 	}
 	if *requests != 0 {
 		t.Fatalf("made %d requests for nonnumeric ID, want 0", *requests)
+	}
+}
+
+func TestHardcoverSaturatedLimiterWaitsBoundedThenCallsUpstream(t *testing.T) {
+	// Hardcover documents a hard 60rpm limit; the client admits at 50rpm so a
+	// saturated worker pool sleeps briefly between calls instead of blasting
+	// past the ceiling into 429s and Cloudflare 403 blocks.
+	srv, client, calls := newHardcoverFake(t, "key")
+	defer srv.Close()
+
+	if _, err := client.Fetch(context.Background(), "42"); err != nil {
+		t.Fatalf("first Fetch() error = %v", err)
+	}
+
+	started := time.Now()
+	if _, err := client.Fetch(context.Background(), "42"); err != nil {
+		t.Fatalf("second Fetch() error = %v, want success after bounded wait", err)
+	}
+	elapsed := time.Since(started)
+	if elapsed < 500*time.Millisecond || elapsed > 2*time.Second {
+		t.Fatalf("second Fetch() took %s, want ~1.2s bounded token wait", elapsed)
+	}
+	if *calls != 2 {
+		t.Fatalf("upstream calls = %d, want 2 after bounded wait admission", *calls)
 	}
 }

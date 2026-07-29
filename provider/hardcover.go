@@ -10,16 +10,25 @@ import (
 	"strings"
 	"unicode"
 
+	"golang.org/x/time/rate"
+
 	"github.com/Silo-Server/silo-plugin-ebook-metadata/metadata"
 )
 
-const hardcoverBaseURL = "https://api.hardcover.app/v1/graphql"
+const (
+	hardcoverBaseURL = "https://api.hardcover.app/v1/graphql"
+	// Hardcover documents a hard 60 requests/minute API limit; sustained
+	// overruns escalate from 429s into longer-lived 403 blocks. 50 keeps a
+	// safety margin under the ceiling.
+	hardcoverRPM = 50
+)
 
 type HardcoverClient struct {
 	baseURL   string
 	apiKey    string
 	client    *http.Client
 	userAgent string
+	limiter   *rate.Limiter
 }
 
 func NewHardcoverClient(apiKey, userAgent string) *HardcoverClient {
@@ -32,11 +41,18 @@ func NewHardcoverClientAt(baseURL, apiKey, userAgent string) *HardcoverClient {
 		apiKey:    apiKey,
 		client:    http.DefaultClient,
 		userAgent: userAgent,
+		limiter:   newLimiter(hardcoverRPM),
 	}
 }
 
 func (c *HardcoverClient) ID() string {
 	return "hardcover"
+}
+
+// SetRequestsPerMinute replaces the client's rate limit. Used to tune the
+// Hardcover request budget (and by tests to force saturation semantics).
+func (c *HardcoverClient) SetRequestsPerMinute(rpm float64) {
+	c.limiter = newLimiter(rpm)
 }
 
 func (c *HardcoverClient) eligible() bool {
@@ -114,6 +130,11 @@ func (c *HardcoverClient) Fetch(ctx context.Context, id string) (*metadata.Match
 }
 
 func (c *HardcoverClient) graphql(ctx context.Context, query string, variables map[string]any) ([]byte, error) {
+	// Single choke point for Search and Fetch: every Hardcover call pays the
+	// 50rpm admission so worker fan-out upstream cannot multiply past it.
+	if err := waitForLimiter(ctx, c.limiter); err != nil {
+		return nil, err
+	}
 	payload, err := json.Marshal(map[string]any{
 		"query":     query,
 		"variables": variables,
