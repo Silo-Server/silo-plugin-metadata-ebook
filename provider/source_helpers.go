@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Silo-Server/silo-plugin-ebook-metadata/metadata"
 )
@@ -66,7 +67,7 @@ func httpDoBytes(ctx context.Context, client *http.Client, req *http.Request) ([
 		return nil, resp.StatusCode, fmt.Errorf("%s %s: response body exceeds %d bytes", req.Method, redactURL(req.URL), maxResponseBytes)
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return body, resp.StatusCode, fmt.Errorf("%s %s: status %d", req.Method, redactURL(req.URL), resp.StatusCode)
+		return body, resp.StatusCode, newHTTPStatusError(req.Method, redactURL(req.URL), resp.StatusCode, resp.Header, time.Now())
 	}
 	return body, resp.StatusCode, nil
 }

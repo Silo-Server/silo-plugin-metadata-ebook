@@ -9,10 +9,17 @@ import (
 	"regexp"
 	"strings"
 
+	"golang.org/x/time/rate"
+
 	"github.com/Silo-Server/silo-plugin-ebook-metadata/metadata"
 )
 
-const googleBooksBaseURL = "https://www.googleapis.com/books/v1"
+const (
+	googleBooksBaseURL = "https://www.googleapis.com/books/v1"
+	// Google Books allows 100 requests per 100 seconds (plus a 1k/day quota
+	// the limiter cannot help with); 60rpm keeps bursts under the window.
+	googleBooksRPM = 60
+)
 
 var googleBooksVolumeIDRE = regexp.MustCompile(`^[A-Za-z0-9_-]{12}$`)
 
@@ -21,6 +28,7 @@ type GoogleBooksClient struct {
 	apiKey    string
 	client    *http.Client
 	userAgent string
+	limiter   *rate.Limiter
 }
 
 func NewGoogleBooksClient(apiKey, userAgent string) *GoogleBooksClient {
@@ -33,11 +41,22 @@ func NewGoogleBooksClientAt(baseURL, apiKey, userAgent string) *GoogleBooksClien
 		apiKey:    apiKey,
 		client:    http.DefaultClient,
 		userAgent: userAgent,
+		limiter:   newLimiter(googleBooksRPM),
 	}
 }
 
 func (c *GoogleBooksClient) ID() string {
 	return "googlebooks"
+}
+
+// SetRequestsPerMinute replaces the client's rate limit. Used to tune the
+// Google Books request budget (and by tests to force saturation semantics).
+func (c *GoogleBooksClient) SetRequestsPerMinute(rpm float64) {
+	setLimiterRPM(c.limiter, rpm)
+}
+
+func (c *GoogleBooksClient) eligible() bool {
+	return strings.TrimSpace(c.apiKey) != ""
 }
 
 func (c *GoogleBooksClient) Search(ctx context.Context, q metadata.SearchQuery) ([]metadata.Match, error) {
@@ -53,6 +72,9 @@ func (c *GoogleBooksClient) Search(ctx context.Context, q metadata.SearchQuery) 
 	}
 	if isbn := metadata.NormalizeISBN(query); isbn != "" {
 		query = "isbn:" + isbn
+	}
+	if err := waitForLimiter(ctx, c.limiter); err != nil {
+		return nil, err
 	}
 	values := url.Values{}
 	values.Set("q", query)
@@ -89,6 +111,10 @@ func (c *GoogleBooksClient) Fetch(ctx context.Context, id string) (*metadata.Mat
 	}
 	if !googleBooksVolumeIDRE.MatchString(id) {
 		return nil, nil
+	}
+	// The ISBN path above delegates to Search, which pays its own admission.
+	if err := waitForLimiter(ctx, c.limiter); err != nil {
+		return nil, err
 	}
 	values := url.Values{}
 	if c.apiKey != "" {

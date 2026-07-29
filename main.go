@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -15,6 +16,10 @@ import (
 	pluginv1 "github.com/Silo-Server/silo-plugin-sdk/pkg/pluginproto/silo/plugin/v1"
 	publicmanifest "github.com/Silo-Server/silo-plugin-sdk/pkg/pluginsdk/manifest"
 	"github.com/Silo-Server/silo-plugin-sdk/pkg/pluginsdk/runtime"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -77,10 +82,11 @@ func (s *metadataServer) Search(ctx context.Context, req *pluginv1.SearchMetadat
 		Year:        int(req.GetYear()),
 		ContentType: req.GetItemType(),
 		ProviderIDs: stringMapFromStruct(req.GetProviderIds()),
-		Language:    firstText(req.GetLanguage(), state.options.DefaultRegion),
+		Language:    strings.TrimSpace(req.GetLanguage()),
+		Region:      state.options.DefaultRegion,
 	})
 	if err != nil {
-		return nil, err
+		return nil, metadataRPCError(err)
 	}
 
 	response := &pluginv1.SearchMetadataResponse{
@@ -104,10 +110,11 @@ func (s *metadataServer) GetMetadata(ctx context.Context, req *pluginv1.GetMetad
 	match, err := state.provider.Fetch(ctx, metadata.SearchQuery{
 		ProviderIDs: providerIDsFromProto(req.GetProviderIds(), capabilityID, req.GetProviderId()),
 		ContentType: req.GetItemType(),
-		Language:    firstText(req.GetLanguage(), state.options.DefaultRegion),
+		Language:    strings.TrimSpace(req.GetLanguage()),
+		Region:      state.options.DefaultRegion,
 	})
 	if err != nil {
-		return nil, err
+		return nil, metadataRPCError(err)
 	}
 	if match == nil {
 		return &pluginv1.GetMetadataResponse{}, nil
@@ -118,6 +125,21 @@ func (s *metadataServer) GetMetadata(ctx context.Context, req *pluginv1.GetMetad
 		return nil, err
 	}
 	return &pluginv1.GetMetadataResponse{Item: item}, nil
+}
+
+func metadataRPCError(err error) error {
+	var rateLimited *provider.RateLimitedError
+	if !errors.As(err, &rateLimited) {
+		return err
+	}
+	st := status.New(codes.ResourceExhausted, "ebook metadata sources are rate limited")
+	withDetails, detailErr := st.WithDetails(&errdetails.RetryInfo{
+		RetryDelay: durationpb.New(rateLimited.RetryAfter()),
+	})
+	if detailErr != nil {
+		return st.Err()
+	}
+	return withDetails.Err()
 }
 
 func providerSearchResultFromMatch(match metadata.Match, itemType string) (*pluginv1.ProviderSearchResult, error) {
@@ -219,15 +241,6 @@ func configEntryString(value *structpb.Struct) string {
 	for _, raw := range fields {
 		if text := strings.TrimSpace(raw.GetStringValue()); text != "" {
 			return text
-		}
-	}
-	return ""
-}
-
-func firstText(values ...string) string {
-	for _, value := range values {
-		if value = strings.TrimSpace(value); value != "" {
-			return value
 		}
 	}
 	return ""

@@ -33,3 +33,18 @@ func TestNormalizeISBNRejectsInvalidChecksums(t *testing.T) {
 		}
 	}
 }
+
+func TestCanonicalISBNConvertsISBN10ToEquivalentISBN13(t *testing.T) {
+	if got := CanonicalISBN("0-441-17271-7"); got != "9780441172719" {
+		t.Fatalf("CanonicalISBN() = %q, want 9780441172719", got)
+	}
+}
+
+func TestEquivalentISBNRecognizesISBN10AndISBN13Edition(t *testing.T) {
+	if !EquivalentISBN("0-441-17271-7", "978-0-441-17271-9") {
+		t.Fatal("EquivalentISBN() = false for equivalent ISBN-10 and ISBN-13")
+	}
+	if EquivalentISBN("0-441-17271-7", "978-0-593-13520-4") {
+		t.Fatal("EquivalentISBN() = true for different editions")
+	}
+}

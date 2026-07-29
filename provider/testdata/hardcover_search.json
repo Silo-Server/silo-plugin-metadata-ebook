@@ -1,17 +1,35 @@
 {
   "data": {
-    "books": [
-      {
-        "id": 97844,
-        "title": "Project Hail Mary",
-        "description": "A lone astronaut.",
-        "release_date": "2021-05-04",
-        "pages": 476,
-        "contributions": [{"author": {"name": "Andy Weir"}}],
-        "editions": [{"isbn_13": "9780593135204", "isbn_10": "0593135202"}],
-        "image": {"url": "https://example/cover.jpg"},
-        "slug": "project-hail-mary"
+    "search": {
+      "results": {
+        "found": 2,
+        "hits": [
+          {
+            "document": {
+              "id": "97844",
+              "title": "Project Hail Mary",
+              "description": "A lone astronaut.",
+              "author_names": ["Andy Weir"],
+              "isbns": ["0593135202", "9780593135204", "8418037016"],
+              "release_year": 2021,
+              "pages": 476,
+              "image": {"url": "https://example/cover.jpg"},
+              "slug": "project-hail-mary"
+            }
+          },
+          {
+            "document": {
+              "id": "555001",
+              "title": "Project Hail Mary (Movie Tie-In)",
+              "author_names": ["Andy Weir"],
+              "isbns": [],
+              "release_year": 2026,
+              "pages": 0,
+              "image": null
+            }
+          }
+        ]
       }
-    ]
+    }
   }
 }

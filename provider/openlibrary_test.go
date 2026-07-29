@@ -6,7 +6,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Silo-Server/silo-plugin-ebook-metadata/metadata"
 )
@@ -137,12 +139,38 @@ func TestOpenLibrarySearchByText(t *testing.T) {
 	if match.Title != "Project Hail Mary" || match.ISBN != "9780593135204" || match.PublishYear != 2021 {
 		t.Fatalf("Search()[0] = %#v", match)
 	}
+	client.limiter = newLimiter(openLibraryRPM)
 	selected, err := client.Fetch(context.Background(), match.ProviderID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if selected == nil || selected.Title != "Project Hail Mary" || selected.ProviderID != "OL27924614M" {
 		t.Fatalf("Fetch(selected ProviderID) = %#v", selected)
+	}
+}
+
+func TestProviderOpenLibrarySearchThenFetchReturnsFullDetail(t *testing.T) {
+	srv, client := newOpenLibraryFake(t)
+	defer srv.Close()
+	client.limiter = newLimiter(6000)
+	p := NewProviderWithSources([]Source{client})
+
+	matches, err := p.Search(context.Background(), metadata.SearchQuery{
+		Title:   "Project Hail Mary",
+		Authors: []string{"Andy Weir"},
+	})
+	if err != nil || len(matches) != 1 {
+		t.Fatalf("Search() = %#v, %v", matches, err)
+	}
+
+	match, err := p.Fetch(context.Background(), metadata.SearchQuery{
+		ProviderIDs: metadata.ProviderIDsFromMatch(matches[0]),
+	})
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+	if match == nil || match.ProviderID != "OL27924614M" || match.Description == "" {
+		t.Fatalf("Fetch() = %#v, want full edition detail", match)
 	}
 }
 
@@ -172,5 +200,36 @@ func TestOpenLibraryUnrecognizedID(t *testing.T) {
 	}
 	if match != nil {
 		t.Fatalf("Fetch() = %#v, want nil", match)
+	}
+}
+
+func TestOpenLibrarySaturatedLimiterWaitsBoundedThenCallsUpstream(t *testing.T) {
+	// At 60rpm the next token is ~1s away — inside the bounded admission
+	// wait, so a saturated OpenLibrary client sleeps briefly and proceeds
+	// instead of deferring the claim. (Instant skipping here starved the
+	// enrichment backfill: every attempt deferred while tokens sat idle.)
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+	client := NewOpenLibraryClientAt(server.URL, server.URL, "test-agent")
+	client.client = server.Client()
+
+	if _, err := client.Fetch(context.Background(), "978-0-441-17271-9"); err != nil {
+		t.Fatalf("first Fetch() error = %v", err)
+	}
+
+	started := time.Now()
+	if _, err := client.Fetch(context.Background(), "978-0-441-17271-9"); err != nil {
+		t.Fatalf("second Fetch() error = %v, want success after bounded wait", err)
+	}
+	elapsed := time.Since(started)
+	if elapsed < 500*time.Millisecond || elapsed > 2*time.Second {
+		t.Fatalf("second Fetch() took %s, want ~1s bounded token wait", elapsed)
+	}
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("upstream calls = %d, want 2 after bounded wait admission", got)
 	}
 }
