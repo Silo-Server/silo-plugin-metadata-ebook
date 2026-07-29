@@ -52,8 +52,13 @@ completes successfully, the request returns a source availability error rather
 than a false no-match.
 
 Open Library requests are admitted at 60 requests per minute because the
-plugin's current user agent does not include contact identification. Waiting
-for admission respects request cancellation and deadlines.
+plugin's current user agent does not include contact identification. Hardcover
+is admitted at 50 requests per minute — a safety margin under its documented
+hard 60/minute ceiling, whose sustained overruns escalate from 429 throttles
+into longer-lived 403 blocks. Google Books is admitted at 60 per minute to
+stay under its 100-per-100-seconds window (its separate daily quota is beyond
+a limiter's reach). Waiting for admission respects request cancellation and
+deadlines.
 
 Each source also has one shared concurrency budget across all active ebook
 jobs. Saturated sources defer excess work immediately instead of allowing a

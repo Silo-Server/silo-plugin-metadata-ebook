@@ -41,6 +41,19 @@ func newLimiter(rpm float64) *rate.Limiter {
 	return rate.NewLimiter(rate.Limit(rpm/60.0), 1)
 }
 
+// setLimiterRPM retunes an existing limiter in place. rate.Limiter is
+// goroutine-safe, so mutating it avoids the data race of swapping the
+// client's limiter pointer while worker goroutines are reading it.
+func setLimiterRPM(l *rate.Limiter, rpm float64) {
+	if rpm <= 0 || math.IsNaN(rpm) || math.IsInf(rpm, 0) {
+		l.SetLimit(0)
+		l.SetBurst(0)
+		return
+	}
+	l.SetLimit(rate.Limit(rpm / 60.0))
+	l.SetBurst(1)
+}
+
 // admissionWaitCap bounds how long admission may sleep for the next token.
 // A saturated 60rpm source's next token is under a second away, so waits at
 // or below the cap admit after a short sleep — skipping there starved the

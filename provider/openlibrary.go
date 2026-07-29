@@ -232,5 +232,5 @@ func (d openLibrarySearchDoc) toMatch(coversBase string) metadata.Match {
 // SetRequestsPerMinute replaces the client's rate limit. Used to tune the
 // OpenLibrary request budget (and by tests to force saturation semantics).
 func (c *OpenLibraryClient) SetRequestsPerMinute(rpm float64) {
-	c.limiter = newLimiter(rpm)
+	setLimiterRPM(c.limiter, rpm)
 }

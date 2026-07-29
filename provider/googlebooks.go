@@ -52,7 +52,7 @@ func (c *GoogleBooksClient) ID() string {
 // SetRequestsPerMinute replaces the client's rate limit. Used to tune the
 // Google Books request budget (and by tests to force saturation semantics).
 func (c *GoogleBooksClient) SetRequestsPerMinute(rpm float64) {
-	c.limiter = newLimiter(rpm)
+	setLimiterRPM(c.limiter, rpm)
 }
 
 func (c *GoogleBooksClient) eligible() bool {

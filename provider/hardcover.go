@@ -52,7 +52,7 @@ func (c *HardcoverClient) ID() string {
 // SetRequestsPerMinute replaces the client's rate limit. Used to tune the
 // Hardcover request budget (and by tests to force saturation semantics).
 func (c *HardcoverClient) SetRequestsPerMinute(rpm float64) {
-	c.limiter = newLimiter(rpm)
+	setLimiterRPM(c.limiter, rpm)
 }
 
 func (c *HardcoverClient) eligible() bool {
