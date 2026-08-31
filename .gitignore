@@ -9,7 +9,9 @@ go.work.sum
 *.log
 logs/
 .DS_Store
-.claude/
+# Local agent/tooling state
+/.agents/
+/.claude/
 .codex/
 .cursor/
 .worktrees/
