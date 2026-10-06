@@ -178,7 +178,17 @@ func defaultSources(options Options) []Source {
 	}
 	enabled := enabledSourceSet(options.EnabledSources)
 	if len(enabled) == 0 {
-		return sources
+		// Without explicit configuration, search only the sanctioned APIs.
+		// The scrape-backed sources rate-limit after a handful of requests,
+		// which stalls bulk enrichment for every install that fans out to
+		// them by default; they stay available via enabled_sources.
+		enabled = map[string]bool{"openlibrary": true, "googlebooks": true}
+		if strings.TrimSpace(options.ISBNdbAPIKey) != "" {
+			enabled["isbndb"] = true
+		}
+		if strings.TrimSpace(options.HardcoverAPIKey) != "" {
+			enabled["hardcover"] = true
+		}
 	}
 	filtered := make([]Source, 0, len(sources))
 	for _, source := range sources {
