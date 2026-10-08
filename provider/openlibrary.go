@@ -59,7 +59,12 @@ func (c *OpenLibraryClient) Search(ctx context.Context, q metadata.SearchQuery) 
 		return []metadata.Match{*match}, nil
 	}
 
-	endpoint := fmt.Sprintf("%s/search.json?q=%s&limit=20", c.baseURL, url.QueryEscape(query))
+	// search.json returns a minimal field set by default (no isbn, no
+	// cover_edition_key), which leaves every doc without a usable provider ID.
+	// Request the fields toMatch needs so search results are actually fetchable.
+	const olSearchFields = "key,cover_edition_key,title,author_name,first_publish_year,isbn,language,subject,cover_i,number_of_pages_median,publisher"
+	endpoint := fmt.Sprintf("%s/search.json?q=%s&fields=%s&limit=20",
+		c.baseURL, url.QueryEscape(query), url.QueryEscape(olSearchFields))
 	body, err := httpGetBytes(ctx, c.client, endpoint, c.userAgent)
 	if err != nil {
 		return nil, err
@@ -139,16 +144,17 @@ type openLibrarySearchResponse struct {
 }
 
 type openLibrarySearchDoc struct {
-	Key          string   `json:"key"`
-	Title        string   `json:"title"`
-	AuthorName   []string `json:"author_name"`
-	FirstPublish int      `json:"first_publish_year"`
-	ISBN         []string `json:"isbn"`
-	Language     []string `json:"language"`
-	Subject      []string `json:"subject"`
-	CoverID      int      `json:"cover_i"`
-	NumPages     int      `json:"number_of_pages_median"`
-	Publisher    []string `json:"publisher"`
+	Key             string   `json:"key"`
+	CoverEditionKey string   `json:"cover_edition_key"`
+	Title           string   `json:"title"`
+	AuthorName      []string `json:"author_name"`
+	FirstPublish    int      `json:"first_publish_year"`
+	ISBN            []string `json:"isbn"`
+	Language        []string `json:"language"`
+	Subject         []string `json:"subject"`
+	CoverID         int      `json:"cover_i"`
+	NumPages        int      `json:"number_of_pages_median"`
+	Publisher       []string `json:"publisher"`
 }
 
 func (e openLibraryEdition) toMatch(coversBase string) metadata.Match {
@@ -199,9 +205,13 @@ func (d openLibrarySearchDoc) toMatch(coversBase string) metadata.Match {
 	isbn := metadata.NormalizeISBN(firstNonEmpty(d.ISBN...))
 	providerID := isbn
 	if providerID == "" {
-		key := strings.TrimPrefix(d.Key, "/books/")
-		if openLibraryEditionIDRE.MatchString(key) {
-			providerID = key
+		// search.json keys are work keys (/works/OL…W), not editions, so prefer
+		// the cover_edition_key (an OL…M edition ID) which Fetch can resolve.
+		for _, key := range []string{d.CoverEditionKey, strings.TrimPrefix(d.Key, "/books/")} {
+			if key = strings.TrimSpace(key); openLibraryEditionIDRE.MatchString(key) {
+				providerID = key
+				break
+			}
 		}
 	}
 	return metadata.Match{
