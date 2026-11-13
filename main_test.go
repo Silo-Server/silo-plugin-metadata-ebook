@@ -233,8 +233,9 @@ func TestLoadManifestParsesEbookCapability(t *testing.T) {
 	if manifest.GetPluginId() != "silo.ebook-metadata" {
 		t.Fatalf("PluginId = %q, want silo.ebook-metadata", manifest.GetPluginId())
 	}
-	if manifest.GetVersion() != "0.1.2" {
-		t.Fatalf("Version = %q, want 0.1.2", manifest.GetVersion())
+	// The version changes with every release, so the test does not pin it.
+	if manifest.GetVersion() == "" {
+		t.Fatal("Version is empty")
 	}
 	if manifest.GetSiloApiVersion() != "v1" {
 		t.Fatalf("SiloApiVersion = %q, want v1", manifest.GetSiloApiVersion())
