@@ -146,6 +146,25 @@ func TestOpenLibrarySearchByText(t *testing.T) {
 	}
 }
 
+func TestOpenLibrarySearchDocUsesCoverEditionKey(t *testing.T) {
+	// search.json docs carry a work key (/works/…W) and often no isbn; the
+	// provider ID must fall back to cover_edition_key (an editable OL…M id),
+	// otherwise the match is dropped and title searches return nothing.
+	doc := openLibrarySearchDoc{
+		Key:             "/works/OL20668819W",
+		CoverEditionKey: "OL27924614M",
+		Title:           "Project Hail Mary",
+		CoverID:         11200092,
+	}
+	m := doc.toMatch("https://covers.openlibrary.org")
+	if m.ProviderID != "OL27924614M" {
+		t.Fatalf("ProviderID = %q, want OL27924614M (cover_edition_key)", m.ProviderID)
+	}
+	if m.CoverURL == "" {
+		t.Fatalf("CoverURL empty, want cover from cover_i")
+	}
+}
+
 func TestOpenLibrarySearchByISBN(t *testing.T) {
 	srv, client := newOpenLibraryFake(t)
 	defer srv.Close()

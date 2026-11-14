@@ -141,6 +141,35 @@ func TestProviderFetchPrefersSourceSpecificID(t *testing.T) {
 	}
 }
 
+func TestProviderFetchBackfillsMissingCoverOnISBNFallback(t *testing.T) {
+	// OpenLibrary wins the ISBN fallback with full metadata but no cover; the
+	// cover must be grafted from a later source rather than left empty.
+	openLibrary := &fakeSource{
+		id:      "openlibrary",
+		fetchID: "9780593135204",
+		fetch:   &metadata.Match{Provider: "openlibrary", ProviderID: "9780593135204", Title: "Book"},
+	}
+	googleBooks := &fakeSource{
+		id:      "googlebooks",
+		fetchID: "9780593135204",
+		fetch:   &metadata.Match{Provider: "googlebooks", CoverURL: "https://books.google.com/x.jpg"},
+	}
+	p := NewProviderWithSources([]Source{openLibrary, googleBooks})
+
+	match, err := p.Fetch(context.Background(), metadata.SearchQuery{
+		ProviderIDs: map[string]string{"isbn": "978-0-593-13520-4"},
+	})
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+	if match == nil || match.Provider != "openlibrary" {
+		t.Fatalf("Fetch() = %#v, want openlibrary primary match", match)
+	}
+	if match.CoverURL != "https://books.google.com/x.jpg" {
+		t.Fatalf("CoverURL = %q, want backfilled googlebooks cover", match.CoverURL)
+	}
+}
+
 func TestProviderFetchISBNFallbackContinuesAfterNilAndError(t *testing.T) {
 	openLibrary := &fakeSource{id: "openlibrary", fetchID: "9780593135204"}
 	googleBooks := &fakeSource{id: "googlebooks", fetchID: "9780593135204", err: errors.New("temporary")}
