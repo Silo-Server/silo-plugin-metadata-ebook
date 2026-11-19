@@ -1,0 +1,61 @@
+{
+  "publishers": [
+    "Random House Large Print"
+  ],
+  "source_records": [
+    "amazon:0593395565",
+    "bwb:9780593395561",
+    "promise:bwb_daily_pallets_2023-01-16:T2-FPZ-739",
+    "ia:projecthailmaryn0000andy"
+  ],
+  "title": "Project Hail Mary",
+  "number_of_pages": 794,
+  "physical_format": "paperback",
+  "full_title": "Project Hail Mary : A Novel",
+  "publish_date": "May 04, 2021",
+  "key": "/books/OL29597011M",
+  "authors": [
+    {
+      "key": "/authors/OL7234434A"
+    }
+  ],
+  "works": [
+    {
+      "key": "/works/OL21745884W"
+    }
+  ],
+  "type": {
+    "key": "/type/edition"
+  },
+  "covers": [
+    15208263,
+    11160822,
+    -1
+  ],
+  "local_id": [
+    "urn:bwbsku:T2-FPZ-739"
+  ],
+  "languages": [
+    {
+      "key": "/languages/eng"
+    }
+  ],
+  "identifiers": {},
+  "ocaid": "projecthailmaryn0000andy",
+  "isbn_10": [
+    "0593395565"
+  ],
+  "isbn_13": [
+    "9780593395561"
+  ],
+  "latest_revision": 12,
+  "revision": 12,
+  "created": {
+    "type": "/type/datetime",
+    "value": "2020-08-28T19:49:24.483076"
+  },
+  "last_modified": {
+    "type": "/type/datetime",
+    "value": "2026-08-25T23:09:27.357457"
+  }
+}
