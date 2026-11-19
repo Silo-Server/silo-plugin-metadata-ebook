@@ -2,7 +2,9 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"math"
+	"net/http"
 
 	"golang.org/x/time/rate"
 )
@@ -19,4 +21,18 @@ func newLimiter(rpm float64) *rate.Limiter {
 // waitForLimiter blocks until the limiter permits a request or ctx is cancelled.
 func waitForLimiter(ctx context.Context, l *rate.Limiter) error {
 	return l.Wait(ctx)
+}
+
+// rateLimitedTransport holds every request, a followed redirect included, until
+// the limiter permits it. A request whose wait would outlast its context fails
+// without being sent.
+type rateLimitedTransport struct {
+	limiter *rate.Limiter
+}
+
+func (t rateLimitedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if err := waitForLimiter(req.Context(), t.limiter); err != nil {
+		return nil, fmt.Errorf("rate limit: %w", err)
+	}
+	return http.DefaultTransport.RoundTrip(req)
 }

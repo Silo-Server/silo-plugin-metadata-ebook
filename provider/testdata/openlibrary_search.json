@@ -1,16 +1,158 @@
 {
+  "numFound": 8,
+  "start": 0,
+  "numFoundExact": true,
+  "num_found": 8,
+  "documentation_url": "https://openlibrary.org/dev/docs/api/search",
+  "q": "Project Hail Mary Andy Weir",
+  "offset": null,
   "docs": [
     {
-      "key": "/works/OL21048001W",
-      "title": "Project Hail Mary",
-      "author_name": ["Andy Weir"],
+      "author_name": [
+        "Andy Weir"
+      ],
+      "cover_i": 11200092,
       "first_publish_year": 2021,
-      "isbn": ["9780593135204"],
-      "language": ["eng"],
-      "subject": ["Science Fiction"],
-      "cover_i": 10473226,
-      "number_of_pages_median": 476,
-      "publisher": ["Ballantine Books"]
+      "key": "/works/OL21745884W",
+      "title": "Project Hail Mary",
+      "editions": {
+        "numFound": 32,
+        "start": 0,
+        "numFoundExact": true,
+        "docs": [
+          {
+            "key": "/books/OL29597011M"
+          }
+        ]
+      }
+    },
+    {
+      "author_name": [
+        "Andy Weir"
+      ],
+      "first_publish_year": 2022,
+      "key": "/works/OL36735881W",
+      "title": "The Martian / Artemis / Project Hail Mary",
+      "editions": {
+        "numFound": 1,
+        "start": 0,
+        "numFoundExact": true,
+        "docs": [
+          {
+            "key": "/books/OL49615465M"
+          }
+        ]
+      }
+    },
+    {
+      "author_name": [
+        "Unique Summary"
+      ],
+      "first_publish_year": 2021,
+      "key": "/works/OL25960717W",
+      "title": "SUMMARY and REVIEW : PROJECT HAIL MARY",
+      "editions": {
+        "numFound": 1,
+        "start": 0,
+        "numFoundExact": true,
+        "docs": [
+          {
+            "key": "/books/OL35039072M"
+          }
+        ]
+      }
+    },
+    {
+      "author_name": [
+        "Irb Media"
+      ],
+      "first_publish_year": 2021,
+      "key": "/works/OL26086346W",
+      "title": "Summary of Andy Weir's Project Hail Mary",
+      "editions": {
+        "numFound": 1,
+        "start": 0,
+        "numFoundExact": true,
+        "docs": [
+          {
+            "key": "/books/OL35207035M"
+          }
+        ]
+      }
+    },
+    {
+      "author_name": [
+        "Antoine McCallan"
+      ],
+      "first_publish_year": 2021,
+      "key": "/works/OL27881734W",
+      "title": "Summary of Project Hail Mary by Andy Weir",
+      "editions": {
+        "numFound": 1,
+        "start": 0,
+        "numFoundExact": true,
+        "docs": [
+          {
+            "key": "/books/OL38106832M"
+          }
+        ]
+      }
+    },
+    {
+      "author_name": [
+        "Good Reads Publishing"
+      ],
+      "first_publish_year": 2021,
+      "key": "/works/OL27267403W",
+      "title": "Summary and Analysis of Project Hail Mary by Andy Weir",
+      "editions": {
+        "numFound": 1,
+        "start": 0,
+        "numFoundExact": true,
+        "docs": [
+          {
+            "key": "/books/OL37005797M"
+          }
+        ]
+      }
+    },
+    {
+      "author_name": [
+        "SuperSummary"
+      ],
+      "cover_i": 12366237,
+      "first_publish_year": 2018,
+      "key": "/works/OL21868175W",
+      "title": "Study Guide -- The Other Wes Moore by Wes Moore",
+      "editions": {
+        "numFound": 455,
+        "start": 0,
+        "numFoundExact": true,
+        "docs": [
+          {
+            "key": "/books/OL38414412M"
+          }
+        ]
+      }
+    },
+    {
+      "author_name": [
+        "SuperSummary"
+      ],
+      "cover_i": 15199344,
+      "first_publish_year": 2018,
+      "key": "/works/OL44112704W",
+      "title": "Study Guide The Personal Librarian by Marie Benedict and Victoria Christopher Murray",
+      "editions": {
+        "numFound": 283,
+        "start": 0,
+        "numFoundExact": true,
+        "docs": [
+          {
+            "key": "/books/OL60937506M"
+          }
+        ]
+      }
     }
   ]
 }
